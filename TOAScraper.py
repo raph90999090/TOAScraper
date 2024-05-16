@@ -18,89 +18,69 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 
 
-
-
-
 intents = discord.Intents.default()
-intents.message_content = True 
-bot = commands.Bot(command_prefix='!', intents=intents)
+intents.messages = True
 
+bot = commands.Bot(command_prefix='.', intents=intents)
 
-print("Initialisation du WebDriver pour Chrome...")
-service = Service(ChromeDriverManager().install())
-driver = webdriver.Chrome(service=service)
-
-url = 'https://news.treeofalpha.com/'
-print(f"Ouverture de l'URL : {url}")
-driver.get(url)
-
-print("Attente pour le chargement initial du JavaScript...")
-time.sleep(5)
-
-
-async def setup_hook():
-    await bot.tree.sync()
-
-bot.setup_hook = setup_hook
-
-
-
-
-
-async def send_discord_message(tweet_text, tweet_link):
-    channel_id = 1204344781593907240  # Remplacez par l'ID de votre channel Discord
+async def send_discord_message_twitter(tweet_link):
+    channel_id = #YOUR CHANNEL ID of discord serv
     channel = bot.get_channel(channel_id)
-    full_message1 = (
-        f"{tweet_text}"
-        f"{tweet_link}"
-    )   
+    full_message1 = f"{tweet_link} @everyone"
     await channel.send(full_message1)
 
 @bot.event
 async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
     await asyncio.gather(
-        main(),
-    )  # Démarre les deux tâches en parallèle
+        twitter(),
+    )
 
 
-async def main():
+async def twitter():
 
-    previous_tweet_text = None  # Variable pour stocker le texte du tweet précédent de Elon Musk/Vitalik
+    print("Initialisation des WebDriver pour Chrome...")
+    #CHANGE THE RANGE() IF YOU WANT A DIFFERENT NUMBER OF SESSION , 5 = 5 sessions and 5 follow tweet account.
+    services = [Service(ChromeDriverManager().install()) for _ in range(5)]
+    drivers = [webdriver.Chrome(service=service) for service in services]
+    #CHANGE RANGE() WITH NUMBER SESSION
+    urls = ['https://news.treeofalpha.com/' for _ in range(5)]
+    tweet_base_urls = [
+        "https://twitter.com/NAME_OF_ACCOUNT1/status",
+        "https://twitter.com/NAME_OF_ACCOUNT2/status"
+    ]
+
+    for driver, url in zip(drivers, urls):
+        driver.get(url)
+    time.sleep(5)
+    previous_tweet_texts = [None] * 5
+
     while True:
-        try:
-            print("Recherche du tweet de Elon Musk dans le feed avec data-index=0...")
-            tweet_container = driver.find_element(By.CSS_SELECTOR, 'div[data-index="0"] .box.padding-smallest.rowToColumn .container.gap-small.alignCenter[style="width: 100%;"] .contentWrapper.column.gap-small')
-            if tweet_container:
-                tweet_link = tweet_container.find_element(By.CSS_SELECTOR, 'h2.contentTitle a').get_attribute('href')
-            
-            # Vérifier si le lien correspond au format des tweets de Elon Musk/Vitalik
-                if tweet_link.startswith("https://twitter.com/elonmusk/status/") or tweet_link.startswith("https://twitter.com/VitalikButerin/status/"):
-                    tweet_text = tweet_container.find_element(By.CSS_SELECTOR, 'h2.contentTitle').text
-                
-                    # Vérifier si le tweet a changé par rapport au précédent
-                    if tweet_text != previous_tweet_text:
-                        print("Nouveau tweet de Elon Musk détecté:")
-                        print(tweet_text)
-                        print(tweet_link)
-                        await send_discord_message(tweet_text, tweet_link)
-                        previous_tweet_text = tweet_text
+        for index, (driver, tweet_base_url) in enumerate(zip(drivers, tweet_base_urls)):
+            try:
+                tweet_container = driver.find_element(By.CSS_SELECTOR, 'div[data-index="0"] .box.padding-smallest.rowToColumn .container.gap-small.alignCenter[style="width: 100%;"] .contentWrapper.column.gap-small')
+                if tweet_container:
+                    tweet_link = tweet_container.find_element(By.CSS_SELECTOR, 'h2.contentTitle a').get_attribute('href')    
+                    if tweet_link.startswith(tweet_base_url):
+                        tweet_text = tweet_container.find_element(By.CSS_SELECTOR, 'h2.contentTitle').text                 
+                        if tweet_text != previous_tweet_texts[index]:
+                            await send_discord_message_twitter(tweet_link)
+                            previous_tweet_texts[index] = tweet_text
+                            driver.get(urls[index])
+                        else:
+                            print(f"tweet not change for session {index+1}.")
                     else:
-                        print("Le tweet de Elon Musk n'a pas changé.")
+                        print(f"need correct url {index+1}.")
                 else:
-                    print("Le tweet dans data-index=0 n'est pas de Elon Musk.")
-            else:
-                print("Aucun tweet trouvé avec data-index=0. Vérifiez le sélecteur CSS.")
-        except Exception as e:
-            print(f"Erreur lors de la recherche du tweet : {e}")
-    
-        print("Attente de 5 secondes avant la prochaine vérification...")
-        await asyncio.sleep(2)
+                    print(f"check CSS {index+1}.")
+            except Exception as e:
+                print(f"Error in tweet fetch {index+1} : {e}")
+            await asyncio.sleep(1)
 
 
-bot.run('DiscordToken')  # A remplacer par votre token de bot Discord
+#YOUR BOT TOKEN DISCORD ---> https://discord.com/developers/applications/ create new app ---> get token --> add to server 
+bot.run('BOT_TOKEN')
  
-
 
 
 
